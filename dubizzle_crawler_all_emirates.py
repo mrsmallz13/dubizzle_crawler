@@ -19,10 +19,9 @@ LOCATIONS = ["dubai", "sharjah", "ajman", "abu-dhabi", "al-ain", "ras-al-khaimah
 
 async def scrape_dubizzle():
     async with async_playwright() as p:
-        # 🔧 Important: use absolute path for Chromium on Render
         browser = await p.chromium.launch(
             headless=True,
-            executable_path="/opt/render/.cache/ms-playwright/chromium-1161/chrome-linux/chrome"
+            executable_path="/opt/render/.cache/ms-playwright/chromium_headless_shell-1161/chrome-linux/headless_shell"
         )
         context = await browser.new_context()
         page = await context.new_page()
