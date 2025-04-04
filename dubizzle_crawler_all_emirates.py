@@ -1,4 +1,3 @@
-
 import asyncio
 from playwright.async_api import async_playwright
 import requests
@@ -6,11 +5,11 @@ import time
 from datetime import datetime
 
 SUPABASE_URL = "https://xkwvubeppqmzhurelcrp.supabase.co"
-SUPABASE_API_KEY = "YOUR_SUPABASE_API_KEY"
+SUPABASE_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhrd3Z1YmVwcHFtemh1cmVsY3JwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0MzY2OTczNiwiZXhwIjoyMDU5MjQ1NzM2fQ.uiQ48x9hlyVuc9kMdA5ohKOviySZ4obFoojjv8PaAPk"
 
 HEADERS = {
-    "apikey": SUPABASE_API_KEY,
-    "Authorization": f"Bearer {SUPABASE_API_KEY}",
+    "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhrd3Z1YmVwcHFtemh1cmVsY3JwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0MzY2OTczNiwiZXhwIjoyMDU5MjQ1NzM2fQ.uiQ48x9hlyVuc9kMdA5ohKOviySZ4obFoojjv8PaAPk",
+    "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhrd3Z1YmVwcHFtemh1cmVsY3JwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0MzY2OTczNiwiZXhwIjoyMDU5MjQ1NzM2fQ.uiQ48x9hlyVuc9kMdA5ohKOviySZ4obFoojjv8PaAPk",
     "Content-Type": "application/json"
 }
 
@@ -20,7 +19,7 @@ async def scrape_dubizzle():
     listings_found = True
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
+        browser = await p.chromium.launch(headless=False)
         context = await browser.new_context()
         page = await context.new_page()
 
@@ -29,13 +28,12 @@ async def scrape_dubizzle():
             print(f"🌍 Navigating to page {page_num}: {url}")
             try:
                 await page.goto(url, timeout=60000)
-                await page.wait_for_timeout(2000)  # 2 seconds delay to let page content load
+                await page.wait_for_timeout(2000)
             except Exception as e:
                 print(f"⚠️ Failed to load page {page_num}: {e}")
                 break
 
-            # Extract listing blocks
-            listings = await page.query_selector_all('[data-testid^="listing-"]')
+            listings = await page.query_selector_all('a[data-testid^="listing-"][href*="/motors/used-cars/"]')
             print(f"✅ Found {len(listings)} listings on page {page_num}")
 
             if not listings:
@@ -57,7 +55,7 @@ async def scrape_dubizzle():
                         "current_price": price,
                         "url": f"https://uae.dubizzle.com{url_element}",
                         "last_seen": datetime.utcnow().isoformat(),
-                        "price_history": [ {"price": price, "timestamp": datetime.utcnow().isoformat()} ]
+                        "price_history": [{"price": price, "timestamp": datetime.utcnow().isoformat()}]
                     }
 
                     response = requests.post(f"{SUPABASE_URL}/rest/v1/listings", headers=HEADERS, json=listing_data)
