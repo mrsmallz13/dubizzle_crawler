@@ -1,72 +1,78 @@
 
 import asyncio
-import time
-from datetime import datetime
 from playwright.async_api import async_playwright
 import requests
-import json
+import time
 
-# Configuration
-SUPABASE_URL = "https://xkwvubeppqmzhurelcrp.supabase.co/rest/v1/listings"
-SUPABASE_API_KEY = "YOUR_SUPABASE_API_KEY"  # Replace with your real key
+SUPABASE_URL = "https://xkwvubeppqmzhurelcrp.supabase.co"
+SUPABASE_API_KEY = "YOUR_SUPABASE_API_KEY"
+
 HEADERS = {
     "apikey": SUPABASE_API_KEY,
     "Authorization": f"Bearer {SUPABASE_API_KEY}",
-    "Content-Type": "application/json",
-    "Prefer": "resolution=merge-duplicates"
+    "Content-Type": "application/json"
 }
-LOCATIONS = ["dubai", "sharjah", "ajman", "abu-dhabi", "al-ain", "ras-al-khaimah", "fujairah", "umm-al-quwain"]
+
+cities = {
+    "dubai": "dubai",
+    "abu-dhabi": "abu-dhabi",
+    "sharjah": "sharjah",
+    "ajman": "ajman",
+    "fujairah": "fujairah",
+    "ras-al-khaimah": "ras-al-khaimah",
+    "umm-al-quwain": "umm-al-quwain"
+}
 
 async def scrape_dubizzle():
     async with async_playwright() as p:
-        # No need for executable_path — let Playwright handle it
         browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context()
-        page = await context.new_page()
+        page = await browser.new_page()
 
-        for location in LOCATIONS:
-            page_number = 1
-            while True:
-                url = f"https://{location}.dubizzle.com/motors/used-cars/?page={page_number}"
-                print(f"🌍 Navigating to page {page_number}: {url}")
-                await page.goto(url, timeout=60000)
+        for city_name, city_slug in cities.items():
+            for page_num in range(1, 1001):
+                url = f"https://www.dubizzle.com/motors/used-cars/?city={city_slug}&page={page_num}"
+                print(f"🌍 Navigating to page {page_num}: {url}")
+                try:
+                    await page.goto(url, timeout=60000)
+                except Exception as e:
+                    print(f"Failed to load page {page_num} for {city_name}: {e}")
+                    break
 
-                await page.wait_for_timeout(1500)
-
-                listings = await page.query_selector_all("[data-testid='listing-card']")
-                print(f"✅ Found {len(listings)} listings on page {page_number}")
-
+                listings = await page.query_selector_all('[data-testid^="listing-"]')
+                print(f"✅ Found {len(listings)} listings on page {page_num}")
                 if not listings:
                     break
 
                 for listing in listings:
-                    href = await listing.get_attribute("href")
-                    title = await listing.inner_text("h2[data-testid='subheading-text']")
-                    price_text = await listing.inner_text("div[data-testid='listing-price']")
-                    price = int("".join(filter(str.isdigit, price_text)))
-                    full_url = f"https://{location}.dubizzle.com{href}"
-                    listing_id = href.split("/")[-2] if href else "unknown"
+                    try:
+                        anchor = await listing.query_selector("a")
+                        href = await anchor.get_attribute("href")
+                        title_elem = await listing.query_selector('[data-testid="heading-text-2"]')
+                        title = await title_elem.inner_text() if title_elem else "No title"
+                        price_elem = await listing.query_selector('[data-testid="listing-price"]')
+                        price_text = await price_elem.inner_text() if price_elem else "0"
+                        price = int("".join(filter(str.isdigit, price_text)))
 
-                    payload = {
-                        "listing_id": listing_id,
-                        "title": title,
-                        "current_price": price,
-                        "url": full_url,
-                        "last_seen": datetime.now().isoformat(),
-                        "price_history": json.dumps([{
-                            "price": price,
-                            "timestamp": datetime.now().isoformat()
-                        }])
-                    }
+                        full_url = f"https://www.dubizzle.com{href}"
+                        payload = {
+                            "listing_id": href,
+                            "title": title,
+                            "current_price": price,
+                            "url": full_url,
+                            "last_seen": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                            "price_history": [price]
+                        }
 
-                    response = requests.post(SUPABASE_URL, headers=HEADERS, data=json.dumps(payload))
-                    print(f"📤 Sent listing to Supabase | Status: {response.status_code}")
+                        response = requests.post(f"{SUPABASE_URL}/rest/v1/listings", headers=HEADERS, json=payload)
+                        print(f"📤 Sent listing to Supabase | Status: {response.status_code}")
+                    except Exception as e:
+                        print(f"⚠️ Error processing listing: {e}")
+                        continue
 
-                page_number += 1
-                time.sleep(1.5)
+                print("⏳ Waiting 1.5 seconds before next page...")
+                await asyncio.sleep(1.5)
 
         await browser.close()
-        print("🏁 Finished scraping all available pages.")
 
 if __name__ == "__main__":
     asyncio.run(scrape_dubizzle())
