@@ -27,7 +27,10 @@ def save_to_supabase(listing):
 
 async def scrape_dubizzle():
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
+        browser = await p.chromium.launch(
+    headless=True,
+    executable_path="/opt/render/.cache/ms-playwright/chromium-1161/chrome-linux/chrome"
+)
         page = await browser.new_page()
 
         for emirate in EMIRATES:
