@@ -1,12 +1,9 @@
-
 services:
-  - type: cron
-    name: dubizzle-crawler-cron
-    runtime: python
+  - type: worker
+    name: dubizzle-crawler
+    env: docker
+    plan: starter
     repo: https://github.com/mrsmallz13/dubizzle_crawler
     branch: main
-    buildCommand: |
-      pip install -r requirements.txt
-    startCommand: |
-      .venv/bin/python -m playwright install && python3 dubizzle_crawler_all_emirates.py
-    schedule: "@daily"
+    dockerfilePath: Dockerfile
+    autoDeploy: true
