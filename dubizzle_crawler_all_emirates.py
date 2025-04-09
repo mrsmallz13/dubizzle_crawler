@@ -22,7 +22,7 @@ async def scrape_dubizzle():
         browser = await p.chromium.launch(headless=True)
         context = await browser.new_context()
         page = await context.new_page()
-        await stealth(page)
+        await stealth.stealth_async(page)
 
         while listings_found:
             url = base_url.format(page_num)
