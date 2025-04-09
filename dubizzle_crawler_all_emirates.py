@@ -19,7 +19,7 @@ async def scrape_dubizzle():
     listings_found = True
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
+        browser = await p.chromium.launch(headless=False)
         context = await browser.new_context()
         page = await context.new_page()
         await stealth.stealth_async(page)
