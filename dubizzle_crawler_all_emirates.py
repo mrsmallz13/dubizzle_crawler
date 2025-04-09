@@ -1,3 +1,4 @@
+from playwright_stealth import stealth_sync
 import asyncio
 from playwright.async_api import async_playwright
 import requests
@@ -22,6 +23,8 @@ async def scrape_dubizzle():
         browser = await p.chromium.launch(headless=True)
         context = await browser.new_context()
         page = await context.new_page()
+        stealth_sync(page)
+await page.wait_for_timeout(5000)  # Optional wait to allow page elements to load
 
         while listings_found:
             url = base_url.format(page_num)
