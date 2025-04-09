@@ -1,16 +1,15 @@
-from playwright_stealth import stealth_sync
+from playwright_stealth import stealth
 import asyncio
 from playwright.async_api import async_playwright
 import requests
-import time
 from datetime import datetime
 
 SUPABASE_URL = "https://xkwvubeppqmzhurelcrp.supabase.co"
 SUPABASE_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhrd3Z1YmVwcHFtemh1cmVsY3JwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0MzY2OTczNiwiZXhwIjoyMDU5MjQ1NzM2fQ.uiQ48x9hlyVuc9kMdA5ohKOviySZ4obFoojjv8PaAPk"
 
 HEADERS = {
-    "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhrd3Z1YmVwcHFtemh1cmVsY3JwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0MzY2OTczNiwiZXhwIjoyMDU5MjQ1NzM2fQ.uiQ48x9hlyVuc9kMdA5ohKOviySZ4obFoojjv8PaAPk",
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhrd3Z1YmVwcHFtemh1cmVsY3JwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0MzY2OTczNiwiZXhwIjoyMDU5MjQ1NzM2fQ.uiQ48x9hlyVuc9kMdA5ohKOviySZ4obFoojjv8PaAPk",
+    "apikey": SUPABASE_API_KEY,
+    "Authorization": f"Bearer {SUPABASE_API_KEY}",
     "Content-Type": "application/json"
 }
 
@@ -23,8 +22,7 @@ async def scrape_dubizzle():
         browser = await p.chromium.launch(headless=True)
         context = await browser.new_context()
         page = await context.new_page()
-        stealth_sync(page)
-await page.wait_for_timeout(5000)  # Optional wait to allow page elements to load
+        await stealth(page)
 
         while listings_found:
             url = base_url.format(page_num)
