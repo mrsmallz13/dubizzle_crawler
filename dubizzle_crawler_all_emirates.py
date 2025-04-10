@@ -1,34 +1,40 @@
 import asyncio
-import uuid
-from datetime import datetime
-from playwright.async_api import async_playwright
-from playwright_stealth import stealth
-import requests
 import json
+import re
+from datetime import datetime
 
-SUPABASE_URL = "https://xkwvubeppqmzhurelcrp.supabase.co"
-SUPABASE_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhrd3Z1YmVwcHFtemh1cmVsY3JwIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0MzY2OTczNiwiZXhwIjoyMDU5MjQ1NzM2fQ.uiQ48x9hlyVuc9kMdA5ohKOviySZ4obFoojjv8PaAPk"
-SUPABASE_TABLE = "listings"
+from playwright.async_api import async_playwright
+from supabase import create_client
+from dotenv import load_dotenv
+import os
+
+# Load environment variables
+load_dotenv()
+
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 async def scrape_dubizzle():
+    base_url = "https://uae.dubizzle.com/motors/used-cars/"
+    listing_selector = 'a[data-testid^="listing-"]'  # Updated selector
+
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=False)
-        context = await browser.new_context()
-        page = await context.new_page()
-        await stealth(page)
-
+        page = await browser.new_page()
         page_num = 1
-        listings_found = True
+        listings_seen = set()
 
-        while listings_found:
-            url = f"https://uae.dubizzle.com/motors/used-cars/?page={page_num}"
+        while True:
+            url = f"{base_url}?page={page_num}"
             print(f"🌍 Navigating to page {page_num}: {url}")
-            await page.goto(url, timeout=60000)
-            await page.wait_for_timeout(5000)
+            await page.goto(url)
+            await page.wait_for_timeout(2000)
 
-            listings = await page.locator('a[data-testid="listing-1"]').all()
+            listings = await page.query_selector_all(listing_selector)
+
             if not listings:
-                print("✅ Found 0 listings on page", page_num)
+                print("🏁 Finished scraping all available pages.")
                 break
 
             print(f"✅ Found {len(listings)} listings on page {page_num}")
@@ -39,46 +45,35 @@ async def scrape_dubizzle():
                     continue
 
                 full_url = f"https://uae.dubizzle.com{href}"
-                title_el = listing.locator('[data-testid="subheading-text"]')
-                price_el = listing.locator('[data-testid="listing-price"]')
-                title = await title_el.inner_text() if await title_el.count() > 0 else "N/A"
-                price = await price_el.inner_text() if await price_el.count() > 0 else "N/A"
-                listing_id = href.strip("/").split("-")[-1]
+                listing_id_match = re.search(r'/([^/]+)/?$', href)
+                listing_id = listing_id_match.group(1) if listing_id_match else href
 
-                payload = {
-                    "id": str(uuid.uuid4()),
+                if listing_id in listings_seen:
+                    continue
+                listings_seen.add(listing_id)
+
+                title_el = await listing.query_selector('[data-testid="subheading-text"]')
+                price_el = await listing.query_selector('[data-testid="listing-price"]')
+
+                title = await title_el.inner_text() if title_el else "N/A"
+                price_text = await price_el.inner_text() if price_el else "0"
+                price = int(re.sub(r"[^\d]", "", price_text))
+
+                now = datetime.utcnow().isoformat()
+                data = {
                     "listing_id": listing_id,
                     "title": title,
                     "current_price": price,
                     "url": full_url,
-                    "last_seen": datetime.utcnow().isoformat(),
-                    "price_history": json.dumps([{
-                        "price": price,
-                        "timestamp": datetime.utcnow().isoformat()
-                    }])
+                    "last_seen": now,
+                    "price_history": json.dumps([{"price": price, "timestamp": now}]),
                 }
 
-                headers = {
-                    "apikey": SUPABASE_API_KEY,
-                    "Authorization": f"Bearer {SUPABASE_API_KEY}",
-                    "Content-Type": "application/json",
-                    "Prefer": "resolution=merge-duplicates"
-                }
-
-                res = requests.post(
-                    f"{SUPABASE_URL}/rest/v1/{SUPABASE_TABLE}",
-                    headers=headers,
-                    data=json.dumps(payload)
-                )
-
-                if res.status_code not in (200, 201):
-                    print(f"❌ Failed to insert {listing_id}: {res.status_code} - {res.text}")
-                else:
-                    print(f"✅ Inserted {listing_id} successfully")
+                # Upsert listing to Supabase
+                supabase.table("listings").upsert(data, on_conflict="listing_id").execute()
 
             page_num += 1
 
-        print("🏁 Finished scraping all available pages.")
         await browser.close()
 
 if __name__ == "__main__":
